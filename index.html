@@ -326,6 +326,11 @@
             margin-left: 8px;
             font-weight: 600;
         }
+        .outcome-timestamp {
+            font-size: 11px;
+            color: #86868b;
+            margin-left: 6px;
+        }
         .badge-no-answer {
             background: #e5e5ea;
             color: #8e8e93;
@@ -575,8 +580,11 @@
         }
 
         contactList.innerHTML = filtered.map(contact => {
-            const outcome = outcomes[contact.id];
-            const badgeHtml = outcome ? `<span class="outcome-badge badge-${outcome}">${formatOutcome(outcome)}</span>` : '';
+            const outcomeData = outcomes[contact.id];
+            let badgeHtml = '';
+            if (outcomeData) {
+                badgeHtml = `<span class="outcome-badge badge-${outcomeData.status}">${formatOutcome(outcomeData.status)}</span><span class="outcome-timestamp">${outcomeData.date}</span>`;
+            }
             return `
             <div class="contact-card ${calledSet.has(contact.id) ? 'called' : ''}" data-id="${contact.id}">
                 <div class="contact-info">
@@ -673,7 +681,11 @@
         btn.addEventListener('click', () => {
             const outcome = btn.dataset.outcome;
             if (currentCallId !== null) {
-                outcomes[currentCallId] = outcome;
+                const now = new Date();
+                const timestamp = (now.getMonth() + 1).toString().padStart(2, '0') + '/' +
+                                  now.getDate().toString().padStart(2, '0') + '/' +
+                                  now.getFullYear();
+                outcomes[currentCallId] = { status: outcome, date: timestamp };
                 markCalled(currentCallId);
                 renderContacts();
             }
