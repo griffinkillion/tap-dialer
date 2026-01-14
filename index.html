@@ -250,6 +250,98 @@
             padding: 40px;
             color: #86868b;
         }
+        .outcome-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 300;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .outcome-modal.active {
+            display: flex;
+        }
+        .outcome-box {
+            background: white;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 320px;
+            overflow: hidden;
+        }
+        .outcome-header {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid #e5e5ea;
+        }
+        .outcome-header h3 {
+            margin: 0 0 4px 0;
+            font-size: 18px;
+            color: #1d1d1f;
+        }
+        .outcome-header p {
+            margin: 0;
+            font-size: 14px;
+            color: #86868b;
+        }
+        .outcome-buttons {
+            display: flex;
+            flex-direction: column;
+        }
+        .outcome-btn {
+            padding: 16px;
+            border: none;
+            background: white;
+            font-size: 17px;
+            cursor: pointer;
+            border-bottom: 1px solid #e5e5ea;
+            transition: background 0.15s;
+        }
+        .outcome-btn:last-child {
+            border-bottom: none;
+        }
+        .outcome-btn:active {
+            background: #f0f0f0;
+        }
+        .outcome-btn.no-answer {
+            color: #8e8e93;
+        }
+        .outcome-btn.call-back {
+            color: #ff9500;
+        }
+        .outcome-btn.qualified {
+            color: #34c759;
+        }
+        .outcome-btn.unqualified {
+            color: #ff3b30;
+        }
+        .outcome-badge {
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 10px;
+            margin-left: 8px;
+            font-weight: 600;
+        }
+        .badge-no-answer {
+            background: #e5e5ea;
+            color: #8e8e93;
+        }
+        .badge-call-back {
+            background: #fff3e0;
+            color: #ff9500;
+        }
+        .badge-qualified {
+            background: #e8f5e9;
+            color: #34c759;
+        }
+        .badge-unqualified {
+            background: #ffebee;
+            color: #ff3b30;
+        }
     </style>
 </head>
 <body>
@@ -301,6 +393,21 @@
     </div>
 </div>
 
+<div class="outcome-modal" id="outcomeModal">
+    <div class="outcome-box">
+        <div class="outcome-header">
+            <h3>Call Outcome</h3>
+            <p id="outcomeContactName">Contact Name</p>
+        </div>
+        <div class="outcome-buttons">
+            <button class="outcome-btn no-answer" data-outcome="no-answer">No Answer</button>
+            <button class="outcome-btn call-back" data-outcome="call-back">Call Back</button>
+            <button class="outcome-btn qualified" data-outcome="qualified">Qualified</button>
+            <button class="outcome-btn unqualified" data-outcome="unqualified">Unqualified</button>
+        </div>
+    </div>
+</div>
+
 <script>
     let contacts = [];
     let calledSet = new Set();
@@ -319,7 +426,11 @@
     const searchOverlay = document.getElementById('searchOverlay');
     const searchInput = document.getElementById('searchInput');
     const clearSearch = document.getElementById('clearSearch');
+    const outcomeModal = document.getElementById('outcomeModal');
+    const outcomeContactName = document.getElementById('outcomeContactName');
     let searchTerm = '';
+    let currentCallId = null;
+    let outcomes = {};
 
     // Upload area interactions
     uploadArea.addEventListener('click', () => fileInput.click());
@@ -463,21 +574,46 @@
             return;
         }
 
-        contactList.innerHTML = filtered.map(contact => `
+        contactList.innerHTML = filtered.map(contact => {
+            const outcome = outcomes[contact.id];
+            const badgeHtml = outcome ? `<span class="outcome-badge badge-${outcome}">${formatOutcome(outcome)}</span>` : '';
+            return `
             <div class="contact-card ${calledSet.has(contact.id) ? 'called' : ''}" data-id="${contact.id}">
                 <div class="contact-info">
-                    <div class="contact-name">${escapeHtml(contact.name)}</div>
+                    <div class="contact-name">${escapeHtml(contact.name)}${badgeHtml}</div>
                     <div class="contact-number">${contact.displayPhone}</div>
                 </div>
-                <a href="tel:${contact.phone}" class="call-btn" onclick="markCalled(${contact.id})">📞</a>
+                <a href="tel:${contact.phone}" class="call-btn" onclick="initiateCall(${contact.id})">📞</a>
             </div>
-        `).join('');
+        `}).join('');
     }
 
     function escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    function formatOutcome(outcome) {
+        const labels = {
+            'no-answer': 'No Answer',
+            'call-back': 'Call Back',
+            'qualified': 'Qualified',
+            'unqualified': 'Unqualified'
+        };
+        return labels[outcome] || outcome;
+    }
+
+    function initiateCall(id) {
+        currentCallId = id;
+        const contact = contacts.find(c => c.id === id);
+        if (contact) {
+            outcomeContactName.textContent = contact.name;
+        }
+        // Show modal after a short delay to let the call initiate
+        setTimeout(() => {
+            outcomeModal.classList.add('active');
+        }, 500);
     }
 
     function markCalled(id) {
@@ -529,6 +665,31 @@
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && searchOverlay.classList.contains('active')) {
             searchOverlay.classList.remove('active');
+        }
+    });
+
+    // Outcome modal functionality
+    document.querySelectorAll('.outcome-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const outcome = btn.dataset.outcome;
+            if (currentCallId !== null) {
+                outcomes[currentCallId] = outcome;
+                markCalled(currentCallId);
+                renderContacts();
+            }
+            outcomeModal.classList.remove('active');
+            currentCallId = null;
+        });
+    });
+
+    // Close modal if tapping outside (optional - remove if you want to force selection)
+    outcomeModal.addEventListener('click', (e) => {
+        if (e.target === outcomeModal) {
+            if (currentCallId !== null) {
+                markCalled(currentCallId);
+            }
+            outcomeModal.classList.remove('active');
+            currentCallId = null;
         }
     });
 </script>
