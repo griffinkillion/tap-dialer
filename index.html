@@ -528,6 +528,31 @@
     let outcomes = {};
     let activeFilter = 'all';
 
+    // localStorage functions
+    function saveProgress() {
+        const data = {
+            calledSet: Array.from(calledSet),
+            outcomes: outcomes
+        };
+        localStorage.setItem('dialerProgress', JSON.stringify(data));
+    }
+
+    function loadProgress() {
+        const saved = localStorage.getItem('dialerProgress');
+        if (saved) {
+            try {
+                const data = JSON.parse(saved);
+                calledSet = new Set(data.calledSet || []);
+                outcomes = data.outcomes || {};
+            } catch (e) {
+                console.error('Error loading saved progress:', e);
+            }
+        }
+    }
+
+    // Load saved progress on startup
+    loadProgress();
+
     // Upload area interactions
     uploadArea.addEventListener('click', () => fileInput.click());
     
@@ -734,6 +759,7 @@
         const card = document.querySelector(`[data-id="${id}"]`);
         if (card) card.classList.add('called');
         updateStats();
+        saveProgress();
     }
 
     function updateStats() {
@@ -743,8 +769,10 @@
     }
 
     resetBtn.addEventListener('click', () => {
-        if (confirm('Reset all called status?')) {
+        if (confirm('Reset all called status and outcomes?')) {
             calledSet.clear();
+            outcomes = {};
+            localStorage.removeItem('dialerProgress');
             renderContacts();
         }
     });
@@ -793,6 +821,7 @@
                 outcomes[currentCallId] = { status: outcome, date: timestamp };
                 markCalled(currentCallId);
                 renderContacts();
+                saveProgress();
             }
             outcomeModal.classList.remove('active');
             currentCallId = null;
