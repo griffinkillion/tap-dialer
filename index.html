@@ -177,17 +177,17 @@
         }
         .search-fab {
             position: fixed;
-            bottom: 24px;
-            right: 24px;
-            width: 56px;
-            height: 56px;
+            top: 20px;
+            right: 20px;
+            width: 44px;
+            height: 44px;
             background: #007aff;
             border-radius: 50%;
             border: none;
             color: white;
-            font-size: 24px;
+            font-size: 20px;
             cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0,122,255,0.4);
+            box-shadow: 0 2px 8px rgba(0,122,255,0.3);
             display: none;
             align-items: center;
             justify-content: center;
@@ -331,6 +331,81 @@
             color: #86868b;
             margin-left: 6px;
         }
+        .filter-section {
+            margin-bottom: 16px;
+            display: none;
+        }
+        .filter-section.visible {
+            display: block;
+        }
+        .filter-label {
+            font-size: 13px;
+            color: #86868b;
+            margin-bottom: 8px;
+        }
+        .filter-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .filter-chip {
+            padding: 8px 14px;
+            border-radius: 20px;
+            border: 1px solid #d2d2d7;
+            background: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .filter-chip:active {
+            transform: scale(0.97);
+        }
+        .filter-chip.active {
+            border-color: transparent;
+        }
+        .filter-chip.all {
+            color: #007aff;
+        }
+        .filter-chip.all.active {
+            background: #007aff;
+            color: white;
+        }
+        .filter-chip.no-answer.active {
+            background: #8e8e93;
+            color: white;
+        }
+        .filter-chip.call-back.active {
+            background: #ff9500;
+            color: white;
+        }
+        .filter-chip.qualified.active {
+            background: #34c759;
+            color: white;
+        }
+        .filter-chip.unqualified.active {
+            background: #ff3b30;
+            color: white;
+        }
+        .filter-chip.uncalled.active {
+            background: #007aff;
+            color: white;
+        }
+        .export-btn {
+            width: 100%;
+            padding: 16px;
+            background: #007aff;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 12px;
+            display: none;
+        }
+        .export-btn:active {
+            opacity: 0.8;
+        }
         .badge-no-answer {
             background: #e5e5ea;
             color: #8e8e93;
@@ -384,9 +459,22 @@
     </div>
 </div>
 
+<div class="filter-section" id="filterSection">
+    <div class="filter-label">Filter by status</div>
+    <div class="filter-chips">
+        <button class="filter-chip all active" data-filter="all">All</button>
+        <button class="filter-chip uncalled" data-filter="uncalled">Uncalled</button>
+        <button class="filter-chip no-answer" data-filter="no-answer">No Answer</button>
+        <button class="filter-chip call-back" data-filter="call-back">Call Back</button>
+        <button class="filter-chip qualified" data-filter="qualified">Qualified</button>
+        <button class="filter-chip unqualified" data-filter="unqualified">Unqualified</button>
+    </div>
+</div>
+
 <div class="contact-list" id="contactList"></div>
 
 <button class="reset-btn" id="resetBtn">Reset All</button>
+<button class="export-btn" id="exportBtn">📥 Export to CSV</button>
 
 <button class="search-fab" id="searchFab">🔍</button>
 
@@ -433,9 +521,12 @@
     const clearSearch = document.getElementById('clearSearch');
     const outcomeModal = document.getElementById('outcomeModal');
     const outcomeContactName = document.getElementById('outcomeContactName');
+    const filterSection = document.getElementById('filterSection');
+    const exportBtn = document.getElementById('exportBtn');
     let searchTerm = '';
     let currentCallId = null;
     let outcomes = {};
+    let activeFilter = 'all';
 
     // Upload area interactions
     uploadArea.addEventListener('click', () => fileInput.click());
@@ -558,24 +649,38 @@
             stats.style.display = 'none';
             resetBtn.style.display = 'none';
             searchFab.style.display = 'none';
+            filterSection.classList.remove('visible');
+            exportBtn.style.display = 'none';
             return;
         }
 
         stats.style.display = 'block';
         resetBtn.style.display = 'block';
         searchFab.style.display = 'flex';
+        filterSection.classList.add('visible');
+        exportBtn.style.display = 'block';
         updateStats();
 
         const filtered = contacts.filter(contact => {
-            if (!searchTerm) return true;
-            const term = searchTerm.toLowerCase();
-            return contact.name.toLowerCase().includes(term) || 
-                   contact.phone.includes(term) ||
-                   contact.displayPhone.includes(term);
+            // Search filter
+            if (searchTerm) {
+                const term = searchTerm.toLowerCase();
+                const matchesSearch = contact.name.toLowerCase().includes(term) || 
+                       contact.phone.includes(term) ||
+                       contact.displayPhone.includes(term);
+                if (!matchesSearch) return false;
+            }
+            
+            // Status filter
+            if (activeFilter === 'all') return true;
+            if (activeFilter === 'uncalled') return !calledSet.has(contact.id);
+            const outcomeData = outcomes[contact.id];
+            if (!outcomeData) return false;
+            return outcomeData.status === activeFilter;
         });
 
         if (filtered.length === 0) {
-            contactList.innerHTML = '<div class="no-results">No contacts match your search</div>';
+            contactList.innerHTML = '<div class="no-results">No contacts match your filter</div>';
             return;
         }
 
@@ -703,6 +808,47 @@
             outcomeModal.classList.remove('active');
             currentCallId = null;
         }
+    });
+
+    // Filter chip functionality
+    document.querySelectorAll('.filter-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            activeFilter = chip.dataset.filter;
+            renderContacts();
+        });
+    });
+
+    // Export to CSV functionality
+    exportBtn.addEventListener('click', () => {
+        const csvRows = [];
+        csvRows.push(['Name', 'Phone', 'Status', 'Date'].join(','));
+        
+        contacts.forEach(contact => {
+            const outcomeData = outcomes[contact.id];
+            const status = outcomeData ? formatOutcome(outcomeData.status) : (calledSet.has(contact.id) ? 'Called' : 'Not Called');
+            const date = outcomeData ? outcomeData.date : '';
+            const row = [
+                `"${contact.name.replace(/"/g, '""')}"`,
+                contact.phone,
+                status,
+                date
+            ].join(',');
+            csvRows.push(row);
+        });
+        
+        const csvContent = csvRows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `call-log-${new Date().toISOString().slice(0,10)}.csv`);
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     });
 </script>
 ```
